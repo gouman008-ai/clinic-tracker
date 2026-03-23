@@ -19,7 +19,7 @@ It simulates a **C-program-like interface** where users can manage patient recor
 ---
 
 ## 🖥️ Demo Interface
-
+- Link: *https://gouman008-ai.github.io/clinic-tracker/*
 - Command-line inspired UI inside the browser
 - Input commands using the text field
 - Press **Enter** or click **Send**
