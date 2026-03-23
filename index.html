@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Hospital Patient Tracker</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1117;color:#e0e0e0;font-family:'Courier New',monospace;
+     display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px}
+header{text-align:center;padding:16px 0 12px}
+header h1{font-size:1.3rem;color:#4ade80;letter-spacing:1px}
+header p{font-size:.78rem;color:#6b7280;margin-top:4px}
+#tw{width:100%;max-width:820px;border:1px solid #2d2d3a;border-radius:10px;
+    overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.6)}
+.ttb{background:#1e1e2e;padding:8px 14px;display:flex;align-items:center;
+     gap:8px;border-bottom:1px solid #2d2d3a}
+.dot{width:12px;height:12px;border-radius:50%}
+.dr{background:#ff5f57}.dy{background:#ffbd2e}.dg{background:#28ca41}
+.ttitle{margin-left:8px;font-size:.78rem;color:#6b7280}
+#output{background:#0d0d14;color:#a8e6a3;padding:16px;height:460px;
+        overflow-y:auto;white-space:pre-wrap;word-break:break-word;
+        font-size:.88rem;line-height:1.6}
+#ir{display:flex;background:#111118;border-top:1px solid #2d2d3a;
+    align-items:center;padding:10px 14px;gap:8px}
+.ps{color:#4ade80;font-size:1rem;user-select:none}
+#ui{flex:1;background:transparent;border:none;outline:none;color:#fff;
+    font-family:'Courier New',monospace;font-size:.88rem;caret-color:#4ade80}
+#sb{background:#4ade80;color:#0f1117;border:none;padding:5px 14px;
+    border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer}
+#sb:hover{background:#22c55e}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏥 Hospital Patient Registration &amp; Follow-up Tracker</h1>
+  <p>C Logic → Running in Browser &nbsp;|&nbsp; Type input and press Enter</p>
+</header>
+<div id="tw">
+  <div class="ttb">
+    <div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div>
+    <span class="ttitle">hospital_tracker</span>
+  </div>
+  <div id="output"></div>
+  <div id="ir">
+    <span class="ps">❯</span>
+    <input id="ui" type="text" placeholder="Type your input here…" autocomplete="off"/>
+    <button id="sb">Send</button>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   DATA STRUCTURES  (mirrors C structs)
+   ═══════════════════════════════════════════════ */
+var patients = [];   // {patientID, name, age, phone}
+var visits   = [];   // {visitID, patientID, date, diagnosis, prescription}
+var FREQUENT  = 3;
+
+/* ═══════════════════════════════════════════════
+   TERMINAL OUTPUT
+   ═══════════════════════════════════════════════ */
+var outputEl = document.getElementById('output');
+function print(t) {
+  outputEl.textContent += t + '\n';
+  outputEl.scrollTop = outputEl.scrollHeight;
+}
+function div()  { print('  ------------------------------------------------'); }
+function hdr(t) { print(''); div(); print('  ' + t); div(); }
+
+/* ═══════════════════════════════════════════════
+   STATE MACHINE  (replaces scanf loop)
+   ═══════════════════════════════════════════════ */
+var state   = 'MENU';   // current step
+var tmpData = {};        // scratch pad for multi-step input
+
+function findPatient(id) {
+  return patients.find(function(p){ return p.patientID === id; }) || null;
+}
+function isValidPhone(s) { return /^\d{10}$/.test(s); }
+function isValidDate(s)  { return /^\d{2}-\d{2}-\d{4}$/.test(s) &&
+  +s.slice(0,2)>=1 && +s.slice(0,2)<=31 &&
+  +s.slice(3,5)>=1 && +s.slice(3,5)<=12; }
+
+function showMenu() {
+  print('\n  MAIN MENU');
+  div();
+  print('  1. Register New Patient');
+  print('  2. Add Visit Record');
+  print('  3. Search Patient by ID');
+  print('  4. Show Visit History for Patient');
+  print('  5. Show Visit Count / Frequent Visitors');
+  print('  6. List All Patients');
+  print('  7. Save Data (localStorage)');
+  print('  0. Exit');
+  div();
+  print('  Enter choice: ');
+  state = 'MENU';
+}
+
+/* ═══════════════════════════════════════════════
+   COMMAND HANDLERS
+   ═══════════════════════════════════════════════ */
+
+/* --- Register Patient (multi-step) --- */
+function startRegister() {
+  hdr('REGISTER NEW PATIENT');
+  tmpData = {};
+  print('  Patient ID (positive integer): ');
+  state = 'REG_ID';
+}
+function handleRegister(input) {
+  if (state === 'REG_ID') {
+    var id = parseInt(input);
+    if (isNaN(id) || id <= 0) { print('  [!] Must be a positive integer.\n  Patient ID: '); return; }
+    if (findPatient(id)) { print('  [!] ID ' + id + ' already exists.\n  Patient ID: '); return; }
+    tmpData.patientID = id;
+    print('  Patient Name: '); state = 'REG_NAME'; return;
+  }
+  if (state === 'REG_NAME') {
+    tmpData.name = input.trim() || 'Unknown';
+    print('  Age (1-120): '); state = 'REG_AGE'; return;
+  }
+  if (state === 'REG_AGE') {
+    var age = parseInt(input);
+    if (isNaN(age) || age < 1 || age > 120) { print('  [!] Enter 1-120.\n  Age: '); return; }
+    tmpData.age = age;
+    print('  Phone (10 digits): '); state = 'REG_PHONE'; return;
+  }
+  if (state === 'REG_PHONE') {
+    if (!isValidPhone(input.trim())) { print('  [!] Exactly 10 digits required.\n  Phone: '); return; }
+    tmpData.phone = input.trim();
+    patients.push({patientID:tmpData.patientID, name:tmpData.name,
+                   age:tmpData.age, phone:tmpData.phone});
+    print('\n  [+] Patient registered! ID: ' + tmpData.patientID);
+    showMenu();
+  }
+}
+
+/* --- Add Visit (multi-step) --- */
+function startAddVisit() {
+  hdr('ADD VISIT RECORD');
+  tmpData = {};
+  print('  Patient ID: '); state = 'VIS_PID';
+}
+function handleAddVisit(input) {
+  if (state === 'VIS_PID') {
+    var id = parseInt(input);
+    if (isNaN(id) || id <= 0 || !findPatient(id)) {
+      print('  [!] Invalid or not found.\n  Patient ID: '); return;
+    }
+    tmpData.patientID = id;
+    print('  Date (DD-MM-YYYY): '); state = 'VIS_DATE'; return;
+  }
+  if (state === 'VIS_DATE') {
+    if (!isValidDate(input.trim())) { print('  [!] Use DD-MM-YYYY.\n  Date: '); return; }
+    tmpData.date = input.trim();
+    print('  Diagnosis: '); state = 'VIS_DIAG'; return;
+  }
+  if (state === 'VIS_DIAG') {
+    tmpData.diagnosis = input.trim() || 'Not specified';
+    print('  Prescription: '); state = 'VIS_PRESC'; return;
+  }
+  if (state === 'VIS_PRESC') {
+    tmpData.prescription = input.trim() || 'None';
+    var vid = visits.length + 1;
+    visits.push({visitID:vid, patientID:tmpData.patientID, date:tmpData.date,
+                 diagnosis:tmpData.diagnosis, prescription:tmpData.prescription});
+    print('\n  [+] Visit added. Visit ID: ' + vid);
+    showMenu();
+  }
+}
+
+/* --- Search --- */
+function startSearch() {
+  hdr('SEARCH PATIENT');
+  print('  Enter Patient ID: '); state = 'SEARCH';
+}
+function handleSearch(input) {
+  var id = parseInt(input);
+  var p = isNaN(id) ? null : findPatient(id);
+  if (!p) { print('  [!] Not found.'); showMenu(); return; }
+  var cnt = visits.filter(function(v){return v.patientID===id;}).length;
+  div();
+  print('  ID     : ' + p.patientID);
+  print('  Name   : ' + p.name);
+  print('  Age    : ' + p.age);
+  print('  Phone  : ' + p.phone);
+  print('  Visits : ' + cnt + (cnt >= FREQUENT ? '  *** FREQUENT VISITOR ***' : ''));
+  div();
+  showMenu();
+}
+
+/* --- Visit History --- */
+function startHistory() {
+  hdr('VISIT HISTORY');
+  print('  Enter Patient ID: '); state = 'HISTORY';
+}
+function handleHistory(input) {
+  var id = parseInt(input);
+  var p = isNaN(id) ? null : findPatient(id);
+  if (!p) { print('  [!] Not found.'); showMenu(); return; }
+  var pv = visits.filter(function(v){return v.patientID===id;});
+  print('\n  Patient: ' + p.name + ' (ID: ' + id + ')'); div();
+  if (!pv.length) { print('  No visits found.'); }
+  else {
+    pv.forEach(function(v) {
+      print('  Visit #' + v.visitID + ' | ' + v.date);
+      print('    Diagnosis    : ' + v.diagnosis);
+      print('    Prescription : ' + v.prescription);
+      div();
+    });
+    print('  Total: ' + pv.length + ' visit(s)');
+  }
+  showMenu();
+}
+
+/* --- Stats --- */
+function showStats() {
+  hdr('VISIT STATS & FREQUENT VISITORS');
+  if (!patients.length) { print('  No patients.'); showMenu(); return; }
+  print('  ' + pad('ID',8) + pad('Name',25) + pad('Visits',8) + 'Status');
+  div();
+  patients.forEach(function(p) {
+    var cnt = visits.filter(function(v){return v.patientID===p.patientID;}).length;
+    print('  ' + pad(p.patientID,8) + pad(p.name,25) + pad(cnt,8) +
+          (cnt >= FREQUENT ? '*** FREQUENT VISITOR ***' : '-'));
+  });
+  div();
+  print('  (Frequent = ' + FREQUENT + '+ visits)');
+  showMenu();
+}
+
+/* --- List All --- */
+function listAll() {
+  hdr('ALL PATIENTS');
+  if (!patients.length) { print('  No patients yet.'); showMenu(); return; }
+  print('  ' + pad('ID',8) + pad('Name',25) + pad('Age',6) + 'Phone');
+  div();
+  patients.forEach(function(p) {
+    print('  ' + pad(p.patientID,8) + pad(p.name,25) + pad(p.age,6) + p.phone);
+  });
+  div();
+  print('  Total: ' + patients.length);
+  showMenu();
+}
+
+/* --- Save / Load localStorage --- */
+function saveData() {
+  try {
+    localStorage.setItem('hp_patients', JSON.stringify(patients));
+    localStorage.setItem('hp_visits',   JSON.stringify(visits));
+    print('  [+] Saved ' + patients.length + ' patient(s), ' + visits.length + ' visit(s) to browser storage.');
+  } catch(e) { print('  [!] Save failed: ' + e.message); }
+  showMenu();
+}
+function loadData() {
+  try {
+    var p = localStorage.getItem('hp_patients');
+    var v = localStorage.getItem('hp_visits');
+    if (p) patients = JSON.parse(p);
+    if (v) visits   = JSON.parse(v);
+    if (patients.length || visits.length)
+      print('  [*] Loaded ' + patients.length + ' patient(s), ' + visits.length + ' visit(s).');
+  } catch(e) {}
+}
+
+/* --- Utility --- */
+function pad(s, n) {
+  s = String(s);
+  while (s.length < n) s += ' ';
+  return s;
+}
+
+/* ═══════════════════════════════════════════════
+   INPUT DISPATCHER
+   ═══════════════════════════════════════════════ */
+function handleInput(raw) {
+  var input = raw.trim();
+
+  /* Register flow */
+  if (['REG_ID','REG_NAME','REG_AGE','REG_PHONE'].indexOf(state) !== -1) {
+    handleRegister(raw); return;
+  }
+  /* Add visit flow */
+  if (['VIS_PID','VIS_DATE','VIS_DIAG','VIS_PRESC'].indexOf(state) !== -1) {
+    handleAddVisit(raw); return;
+  }
+  /* Single-step states */
+  if (state === 'SEARCH')  { handleSearch(input);  return; }
+  if (state === 'HISTORY') { handleHistory(input); return; }
+
+  /* MENU */
+  switch (input) {
+    case '1': startRegister(); break;
+    case '2': startAddVisit(); break;
+    case '3': startSearch();   break;
+    case '4': startHistory();  break;
+    case '5': showStats();     break;
+    case '6': listAll();       break;
+    case '7': saveData();      break;
+    case '0':
+      saveData();
+      print('\n  Goodbye!\n');
+      document.getElementById('ui').disabled = true;
+      document.getElementById('sb').disabled = true;
+      break;
+    default:
+      print('  [!] Enter 0-7.');
+      showMenu();
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   UI WIRING
+   ═══════════════════════════════════════════════ */
+var inputEl = document.getElementById('ui');
+var btnEl   = document.getElementById('sb');
+
+function send() {
+  var v = inputEl.value;
+  inputEl.value = '';
+  print('> ' + v);
+  handleInput(v);
+}
+btnEl.addEventListener('click', send);
+inputEl.addEventListener('keydown', function(e){ if(e.key==='Enter') send(); });
+
+/* ═══════════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════════ */
+loadData();
+div();
+print('   HOSPITAL PATIENT REGISTRATION & FOLLOW-UP TRACKER');
+div();
+showMenu();
+inputEl.focus();
+</script>
+</body>
+</html>
